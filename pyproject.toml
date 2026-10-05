@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "weathermesh-5c"
+version = "0.1.0"
+description = "Inference runtime for WeatherMesh-5c and AIDA"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE.md"]
+authors = [{ name = "WindBorne Systems, Inc." }]
+dependencies = [
+    "netcdf4>=1.7",
+    "numcodecs>=0.13",
+    "numpy>=2.2,<2.5",
+    "pygrib>=2.1.8",
+    "requests>=2.32",
+    "scipy>=1.15",
+    "torch>=2.11,<2.14",
+    "triton>=3.1; platform_system == 'Linux'",
+    "zarr>=2.18,<4",
+]
+
+[project.urls]
+Repository = "https://github.com/windborne/weathermesh-5c"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3", "ruff>=0.11", "xarray>=2024.1"]
+ingest-build = ["cmake>=3.24", "meson>=1.5", "ninja>=1.11"]
+windborne = ["windborne>=1.7,<2"]
+
+[project.scripts]
+wm5c-obs = "weathermesh5c.ingest.cli:main"
+wm5c-background = "weathermesh5c.background.cli:main"
+wm5c-inspect = "weathermesh5c.inspect:main"
+wm5c-install-ncepbufr = "weathermesh5c.ncepbufr:main"
+wm5c-run = "weathermesh5c.run:main"
+wm5c-smoke = "weathermesh5c.smoke:main"
+
+[tool.setuptools.packages.find]
+include = ["weathermesh5c*"]
+
+[tool.setuptools.package-data]
+weathermesh5c = ["_core/norm/*.json", "ingest/assets/*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"weathermesh5c/_core/triconatten/triconatten.py" = ["E741"]

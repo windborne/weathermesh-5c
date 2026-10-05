@@ -1,0 +1,5 @@
+include PROVENANCE.md
+include VALIDATION.md
+include MODEL_CARD.md
+recursive-include scripts *.sh
+recursive-include scripts *.py
