@@ -149,7 +149,9 @@ AIDA and WeatherMesh-5c, and writes physical ensemble forecasts plus a JSON mani
 Add `--windborne` and set `WB_API_KEY` to include official WindBorne
 super-observations in AIDA.
 
-The default profile matches the operational realtime inference calculation:
+The default profile uses the operational ensemble and output schedule, with public
+input sources. Open IFS, NOAA OISST, and public observations differ from the internal
+production feeds, so this does not imply identical end-to-end forecasts:
 
 - Open IFS perturbed members 1 through 24 each receive a separate AIDA analysis;
 - each latent follows one path through hour 69;
