@@ -34,6 +34,10 @@ assembly, plotting, internal server control, credentials, or cloud-control code.
 
 ## Environment
 
+Use Linux with an NVIDIA GPU, a compatible NVIDIA driver, a C compiler, and `uv`. The committed
+lock installs PyTorch with the CUDA-12.8 runtime. GPU memory requirements depend
+on the workflow and the selected outputs.
+
 WeatherMesh-5c uses a repository-local `.venv`. Run project commands through the
 launcher so an inherited environment setting cannot select a shared or unrelated
 Python environment:
@@ -52,8 +56,17 @@ select another project or environment. Do not call `uv` directly from this repos
 ## Runtime bundle
 
 The checkpoint and static runtime assets are hosted separately on
-[Hugging Face](https://huggingface.co/windborne/weathermesh-5c). A local copy keeps
-the same directory layout:
+[Hugging Face](https://huggingface.co/windborne/weathermesh-5c). Download the public
+bundle without an account or token:
+
+```bash
+./scripts/wm5c-uv.sh run --no-sync python scripts/download-runtime-bundle.py
+```
+
+The script pins revision `260377d3534a098a5a3369adab309f897a351bc3`, verifies each
+file's SHA-256, and writes `data/runtime-bundle`. Use `--output PATH` for another
+directory. Run the same command again to reuse valid files and replace incomplete
+or corrupt downloads. A local copy keeps the same directory layout:
 
 ```text
 runtime-bundle/
@@ -134,6 +147,74 @@ changing it changes the checkpoint's numerical input and forecast.
 The Earth2Studio integration provides `WeatherMesh5C` for forecasts from weather
 fields, `AIDA` for analysis from background fields and observations, and
 `AIDAWeatherMesh5C` for forecasts initialized by AIDA. All three use this runtime.
+
+## Forecast without observations
+
+The standalone background adapter uses global ECMWF Open IFS perturbed ensemble
+members and NOAA OISST. It downloads and prepares these public inputs with this
+command:
+
+```bash
+./scripts/wm5c-uv.sh run --no-sync wm5c-background ingest --member 1
+```
+
+This selects the latest available IFS cycle. Use `--cycle YYYYMMDDHH` for a fixed
+cycle at 00, 06, 12, or 18 UTC while it is available from ECMWF's public rolling
+archive. OISST uses the latest available earlier day within seven days of that
+cycle. The adapter handles GRIB decoding, grid alignment, missing pressure levels,
+normalization, and SST preparation.
+
+Replace `/path/to/prepared-background.npz` below with the printed `background=`
+path. This example encodes the prepared background directly, advances
+WeatherMesh-5c by three hours, and writes physical surface and pressure fields.
+It uses the forecast model without AIDA updates or
+observation downloads. The observation decoder build and API credentials are
+optional for this workflow.
+
+```bash
+./scripts/wm5c-uv.sh run --no-sync python - <<'PY'
+from datetime import timedelta
+
+import numpy as np
+
+from weathermesh5c import Inference, load_model
+from weathermesh5c.background import load_background
+
+background = load_background("/path/to/prepared-background.npz")
+forecast = Inference(load_model("data/runtime-bundle")).to("cuda:0").eval()
+latent = forecast.encode(background.values, background.cycle)
+values = forecast.decode(forecast.step(latent))
+assert np.isfinite(values).all(), "Forecast contains non-finite values"
+np.savez_compressed(
+    "data/forecast-f003.npz",
+    values=values,
+    variables=np.asarray(forecast.variables),
+    latitude=forecast.output_latitudes,
+    longitude=forecast.output_longitudes,
+    forecast_reference_time=background.cycle.isoformat(),
+    valid_time=(background.cycle + timedelta(hours=3)).isoformat(),
+)
+PY
+```
+
+The `values` axes are member, variable, latitude, and longitude. There is one
+member on a 720 by 1440 global grid. Field names are in `variables`, with pressure
+levels in hPa appended to each pressure field name. Temperature is in kelvin,
+wind in m/s, mean sea-level pressure in Pa, geopotential in m²/s², and specific
+humidity in kg/kg. Precipitation is in metres. All recorded times are UTC.
+These raw model predictions can include negative precipitation or humidity and
+cloud-cover fractions outside zero to one.
+These are forecasts from the selected IFS member. Forecast skill needs separate
+evaluation for this initialization method.
+
+For offline inference, transfer the checkout, runtime bundle, and prepared
+background to the target system. Prepare its Python environment and NVIDIA driver
+before disconnecting. The Python forecast example reads local files only.
+
+The `weathermesh5c.smoke` command below also supports empty observation batches,
+and exercises an AIDA update before the forecast. The full `wm5c-run` command
+requires observations for each AIDA update. `--skip-observation-ingest` reuses
+processed observations that are already present.
 
 ## End-to-end forecast
 
